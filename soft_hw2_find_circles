@@ -1,0 +1,267 @@
+#include "stdafx.h"
+#include<opencv/cv.hpp>
+using namespace cv;
+#include <iostream>
+using namespace std;
+#include <time.h>
+#include <math.h>
+#define MY_OK 1
+#define MY_FAIL -1
+#define MY_PI 3.1415
+#define PI_180 0.017444 //PI/180
+
+int ustc_Find_Circles_By_Difference(Mat colorImg, int min_radius, int max_radius, int min_center_dist, int min_radius_dist, int max_circle_diff, int* x, int* y, int* radius, int* circle_cnt, int max_circle )
+{
+	if (NULL == colorImg.data || 3 != colorImg.channels())
+	{
+		cout << "invalid image input" << endl;
+		return MY_FAIL;
+	}
+	int rows = colorImg.rows;
+	int cols = colorImg.cols;
+	// create matrix to store the difference
+	int **dif_matrix= new int*[max_radius - min_radius + 2];
+	// initialize the matrix
+	for (int r = 0; r <= max_radius-min_radius +1; r++)
+	{
+		dif_matrix[r] = new int[rows * cols];
+		memset(dif_matrix[r], 0, rows*cols*sizeof(int));
+	}
+	// calculate the difference
+	uchar *Img = colorImg.data;
+	int dif_radius = 5;
+	int max_num_point = 2 * (max_radius - dif_radius)*MY_PI;
+	int *circle_out_x = new int[max_num_point];
+	int *circle_out_y = new int[max_num_point];
+	int *circle_in_x = new int[max_num_point];
+	int *circle_in_y = new int[max_num_point];
+	for (int r = min_radius; r <= max_radius; r++)
+	{
+		int num_point = 360;
+		if (r > 65) {
+			num_point = 2 * (r - dif_radius)*MY_PI;
+
+		}
+		//coordinates of the inner and outer circle
+		
+		int r_in = r - dif_radius;//inner circle
+		int r_out = r + dif_radius;//outer circle
+		//initialize the coordinates
+		for (int i = 0; i < num_point; i++)
+		{
+			//float pi_4 = num_point / 4.0;
+			float myangle = 2.0 * MY_PI / num_point* i;
+			circle_out_x[i] = r_out * cos(myangle);
+			circle_out_y[i] = r_out * sin(myangle);
+			circle_in_x[i] = r_in * cos(myangle);
+			circle_in_y[i] = r_in * sin(myangle);
+		}
+		//major loop
+		float temp = 0;
+		int conti_point = 0;
+		int quarter_circle = int(num_point / 4.0 + 0.5);
+		int subrows = rows - r_out * 2;
+		int subcols = cols - r_out * 2;
+		int temp_out_x;
+		int temp_out_y;
+		int temp_in_x;
+		int temp_in_y;
+		int color_r;
+		int color_g;
+		int color_b;
+		for (int j = 0; j < rows; j++)
+			for (int k = 0; k < cols; k++)
+			{
+				conti_point = 0;
+				temp = 0;
+				for (int i = 0; i < num_point; i++)
+				{
+					 temp_out_x = circle_out_x[i] + k ;
+					 temp_out_y = circle_out_y[i] + j ;
+					 temp_in_x = circle_in_x[i] + k ;
+					 temp_in_y = circle_in_y[i] + j ;
+					if (temp_out_y >= 0 && temp_out_y < rows && temp_out_x >= 0 && temp_out_x < cols)
+					{
+						conti_point++;
+						color_r = 3 * (temp_out_y * cols + temp_out_x);
+						color_g = color_r + 1;
+						color_b = color_r + 2;
+						temp += Img[color_r];
+						temp += Img[color_g];
+						temp += Img[color_b];
+						color_r = 3 * (temp_in_y * cols + temp_in_x);
+						color_g = color_r + 1;
+						color_b = color_r + 2;
+						temp -= Img[color_r];
+						temp -= Img[color_g];
+						temp -= Img[color_b];
+					}
+					else {
+						if (conti_point >= quarter_circle)
+							break;
+						else {
+							conti_point = 0;
+							temp = 0;
+						}
+					}
+				}
+			    if (conti_point >= quarter_circle)
+						dif_matrix[r - min_radius + 1][(j)*cols + (k)] = abs(int(temp / conti_point / 3.0 + 0.5));
+				
+				
+			}
+	}
+	//find the circles
+	int total_num = 0;
+	for (int j = 0; j < rows; j++)
+		for (int k = 0; k < cols; k++)
+		{
+			int ord = j* cols +k;
+			for (int r = 0; r <= max_radius - min_radius; r++)
+			{
+				if (dif_matrix[r + 1][ord] < max_circle_diff)
+				{
+					dif_matrix[r + 1][ord] = 0;
+				}
+				else
+				{
+					total_num += 1;
+					dif_matrix[0][ord]+= 1;
+				}
+			}
+		}		
+	for(int j = 0; j< rows; j++ )
+		for (int k = 0; k < cols; k++)
+		{
+			int ord = j* cols +k;
+			for (int r = 0; r <= max_radius-min_radius; r++)
+			{
+				if (dif_matrix[r + 1][ord] > 0)
+				{ //scan the neighbours
+					int max_ord = ord;
+					int max_r = (r + 1);
+					for (int angle = 0; angle <= 180; angle++)
+					{
+						float angle_cos = cos(angle*PI_180);
+						float angle_sin = sin(angle*PI_180);
+						for (int center_dist = 0; center_dist <= min_center_dist; center_dist++)
+						{
+							int j_neighbours = floor(j + center_dist*angle_sin + 0.5);
+							int k_neighbours = floor(k + center_dist*angle_cos + 0.5);
+							if (j_neighbours >= 0 && j_neighbours < rows && k_neighbours >= 0 && k_neighbours < cols)
+							{
+								int cord_neighbours = j_neighbours* cols + k_neighbours;
+								for (int r_neighbours = (r + 1 - min_radius_dist); r_neighbours <= (r + 1 + min_radius_dist); r_neighbours++)
+								{
+									if (r_neighbours > 0 && r_neighbours <= max_radius - min_radius + 1)
+									{								
+										if(dif_matrix[r_neighbours][cord_neighbours]>0)
+										{
+											if (dif_matrix[r_neighbours][cord_neighbours]>dif_matrix[max_r][max_ord])
+											{
+												dif_matrix[0][max_ord] -=1;
+												dif_matrix[max_r][max_ord] = 0;
+											    max_r = r_neighbours;
+												max_ord = cord_neighbours;
+												total_num--;
+											}
+											else {
+												if ((cord_neighbours != max_ord) || (r_neighbours!=max_r))
+												{
+													dif_matrix[0][cord_neighbours]-=1;
+													dif_matrix[r_neighbours][cord_neighbours] = 0;
+													total_num--;
+												}
+											}
+										}										
+									}
+								}
+							}
+						}
+					}
+				}
+			}
+		}
+	*circle_cnt = total_num;
+	x = new int[total_num];
+	y = new int[total_num];
+	radius = new int[total_num];
+	int *dif_rec = new int[total_num];
+	int index = 0;
+    for (int j = 0; j< rows; j++)
+		for (int k = 0; k < cols; k++)
+		{
+			int ord = j* cols +k;
+			if (dif_matrix[0][ord] > 0)
+			{
+				
+				for (int r = 1; r <= max_radius - min_radius + 1; r++)
+				{
+					if (dif_matrix[r][ord] > 0)
+					{
+						y[index] = j + 1;
+						x[index] = k + 1;
+						radius[index] = r + min_radius - 1;
+						dif_rec[index] = dif_matrix[r][ord];
+						index++;
+					}
+				}
+			}
+			
+		}
+	int num_show = total_num;
+	if (max_circle < total_num)
+	{
+		cout << "maximum threshold" << endl;
+		num_show = max_circle;
+		for (int i = 0; i < num_show; i++)
+		{
+			for (int j = i + 1; j < total_num; j++)
+			{
+				int temp_x, temp_y, temp_radius, temp_difrec;
+				if (dif_rec[j] > dif_rec[i])
+				{
+					temp_x = x[i]; temp_y = y[i]; temp_radius = radius[i]; temp_difrec = dif_rec[i];
+					x[i] = x[j]; y[i] = y[j]; radius[i] = radius[j]; dif_rec[i] = dif_rec[j];
+					x[j] = temp_x; y[j] = temp_y; radius[j] = temp_radius; dif_rec[j] = temp_difrec;
+				}
+			}
+		}
+	}
+	cout << "total number of circles: " << total_num << endl;
+	Mat foundCircles(rows, cols, CV_8UC1);
+	for(int j = 0; j< rows; j++)
+		for (int k = 0; k < cols; k++)
+		{
+			int cord = cols*j + k;
+			foundCircles.data[cord] = 255;
+		}
+
+	for (int i = 0; i < num_show; i++)
+	{
+		int j = y[i];
+		int k = x[i];
+		int r = radius[i];
+		int num_point = 2 * (r - dif_radius)*MY_PI;
+		cout << "x= " << k;
+		cout << "y= " << j;
+		cout << "r= " << r;
+		cout << "pixel_difference= " << dif_rec[i]<<endl;
+		for (int c = 0; c < num_point; c++)
+		{
+			float myangle = 2.0 * MY_PI / num_point*c;
+			int circle_x = r * cos(myangle)+k;
+			int circle_y = r * sin(myangle)+j;
+			if (circle_x > 0 && circle_x < cols && circle_y >0 && circle_y < rows)
+			{
+				int cord = circle_y * cols + circle_x;
+				foundCircles.data[cord] = 0;
+			}
+			
+		}
+	}
+	namedWindow("foundCircles", 0);
+	imshow("foundCircles", foundCircles);
+	waitKey();
+	return MY_OK;
+}
