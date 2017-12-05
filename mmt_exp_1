@@ -1,0 +1,119 @@
+#include "stdafx.h"
+#include <Windows.h>
+#include <string>
+#pragma comment(lib, "Winmm.lib")
+using namespace std;
+void mystopplay();
+DWORD recordWAVEFile(DWORD dwMilliSeconds);
+int main()
+{
+	LPCWSTR lp = _T("E:\\courses\\vocal\\exp_2\\test_16k.wav");
+	LPCWSTR sv = _T("E:\\courses\\vocal\\exp_2\\test_16.wav");
+	///exp_1_1
+	//bool a = sndPlaySound(lp, SND_SYNC);
+	//cout << a << endl;
+	///exp_1_2
+    //PlaySound(lp, NULL, SND_SYNC);
+	///exp_1_3
+	
+	HWND hwnd;
+	MCI_OPEN_PARMS mciopen;
+	MCI_PLAY_PARMS mciplay;
+	DWORD rtrn;
+	char b[80];
+	hwnd = GetActiveWindow();
+	mciopen.lpstrElementName = lp;
+	mciopen.lpstrDeviceType =  L"waveaudio";
+	rtrn = mciSendCommand(0, MCI_OPEN, MCI_OPEN_TYPE | MCI_OPEN_ELEMENT,
+		(DWORD)(LPVOID)&mciopen);
+	if (rtrn != 0) {
+		mciGetErrorString(rtrn, (LPWSTR)b, 80);
+		::MessageBox(hwnd, (LPWSTR)b, L"MCI ERROR!", MB_OK);
+	}
+	MCIDEVICEID wDeviceID = mciopen.wDeviceID;
+	mciplay.dwCallback = (DWORD)hwnd;
+	mciplay.dwFrom = 0L;
+	rtrn = mciSendCommand(wDeviceID, MCI_PLAY, MCI_FROM|MCI_WAIT, (DWORD)(LPVOID)&mciplay);
+	if (rtrn != 0L) {
+		mciGetErrorString(rtrn, (LPWSTR)b, 80);
+		::MessageBox(hwnd, (LPWSTR)b, L"MCI ERROR!", MB_OK);
+		mciSendCommand(wDeviceID, MCI_CLOSE, 0, NULL);
+	}
+	//mystopplay;
+	
+	///exp1_4
+
+	//recordWAVEFile(2000);
+	return 0;
+}
+void mystopplay() {
+	HWND hwnd;
+	MCI_GENERIC_PARMS mcistop;
+	hwnd = GetActiveWindow();
+	mcistop.dwCallback = (DWORD)hwnd;
+	mciSendCommand(MCI_DEVTYPE_SEQUENCER, MCI_STOP,0, (DWORD)(LPVOID)&mcistop);
+}
+DWORD recordWAVEFile(DWORD dwMilliSeconds)
+{
+	HWND hMainWnd;
+	hMainWnd = GetActiveWindow();
+	UINT wDeviceID;
+	DWORD dwReturn;
+	MCI_OPEN_PARMS mciOpenParms;
+	MCI_RECORD_PARMS mciRecordParms;
+	MCI_SAVE_PARMS mciSaveParms;
+	MCI_PLAY_PARMS mciPlayParms;
+
+	// Open a waveform-audio device with a new file for recording.
+	mciOpenParms.lpstrDeviceType = L"waveaudio";
+	mciOpenParms.lpstrElementName = L"";
+	if (dwReturn = mciSendCommand(0, MCI_OPEN,
+		MCI_OPEN_ELEMENT | MCI_OPEN_TYPE,
+		(DWORD)(LPVOID)&mciOpenParms))
+	{
+		// Failed to open device; don't close it, just return error.
+		return (dwReturn);
+	}
+
+	// The device opened successfully; get the device ID.
+	wDeviceID = mciOpenParms.wDeviceID;
+
+	// Begin recording and record for the specified number of 
+	// milliseconds. Wait for recording to complete before continuing. 
+	// Assume the default time format for the waveform-audio device 
+	// (milliseconds).
+	mciRecordParms.dwTo = dwMilliSeconds;
+	if (dwReturn = mciSendCommand(wDeviceID, MCI_RECORD,
+		MCI_TO | MCI_WAIT, (DWORD)(LPVOID)&mciRecordParms))
+	{
+		mciSendCommand(wDeviceID, MCI_CLOSE, 0, NULL);
+		return (dwReturn);
+	}
+
+	// Play the recording and query user to save the file.
+	mciPlayParms.dwFrom = 0L;
+	if (dwReturn = mciSendCommand(wDeviceID, MCI_PLAY,
+		MCI_FROM | MCI_WAIT, (DWORD)(LPVOID)&mciPlayParms))
+	{
+		mciSendCommand(wDeviceID, MCI_CLOSE, 0, NULL);
+		return (dwReturn);
+	}
+	if (MessageBox(hMainWnd, L"Do you want to save this recording?",
+		L"", MB_YESNO) == IDNO)
+	{
+		mciSendCommand(wDeviceID, MCI_CLOSE, 0, NULL);
+		return (0L);
+	}
+
+	// Save the recording to a file named TEMPFILE.WAV. Wait for
+	// the operation to complete before continuing.
+	mciSaveParms.lpfilename = L"E:\\courses\\vocal\\exp_2\\test_16.wav";
+	if (dwReturn = mciSendCommand(wDeviceID, MCI_SAVE,
+		MCI_SAVE_FILE | MCI_WAIT, (DWORD)(LPVOID)&mciSaveParms))
+	{
+		mciSendCommand(wDeviceID, MCI_CLOSE, 0, NULL);
+		return (dwReturn);
+	}
+
+	return (0L);
+}
