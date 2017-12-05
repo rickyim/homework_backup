@@ -1,0 +1,248 @@
+#include "stdafx.h"
+//#include <opencv2/opencv.hpp>
+#include<opencv/cv.hpp>
+#define INF 1<<20
+using namespace cv;
+/*params: ch, bh, bw, ah, aw*/
+void SeamcarvingAnn(uchar * dup_a, uchar * smoothmap, int * params);
+void DeletePath(uchar* dup_a, uchar* smoothmap, int aw, int ah, int carvingtype, int ch, int image_w, int image_h );
+void SeamcarvingAnn(uchar * dup_a, uchar * smoothmap, int * params) {
+	
+	int ch = params[0];//channel
+	int bh = params[1];//hight of retarget image
+	int bw = params[2];//width of retarget image
+	int ah = params[3];//hight of original image
+	int aw = params[4];//width of original image
+	int dif_w = aw - bw;//width difference
+	int dif_h = ah - bh;//hight difference
+	int image_w = aw;
+	int image_h = ah;
+	for(int i = 0; i < dif_w; i++)//carving width
+	{
+		DeletePath(dup_a, smoothmap, aw, ah, 0, ch, image_w, image_h);
+		aw = aw - 1;
+	}
+	for (int i = 0; i < dif_h; i++)//carving height
+	{
+		DeletePath(dup_a, smoothmap, aw, ah, 1, ch, image_w, image_h);
+		ah = ah - 1;
+	}
+
+}
+void DeletePath(uchar* dup_a, uchar* smoothmap, int aw, int ah, int carvingtype, int ch, int image_w, int image_h) {
+	float*** mapindex = new float**[ah];
+	for (int i = 0; i < ah; i++) {
+		mapindex[i] = new float*[aw];
+		for (int j = 0; j < aw; j++)
+		{
+			mapindex[i][j] = new float[2];//0 as cost, 1 indicate direction
+			mapindex[i][j][0] = 0;
+			mapindex[i][j][1] = 0;//unknown beforehand;
+		}
+	}
+
+	if (ah <= 1 || aw <= 1)
+	{
+		std::cout << "dimension error!" << std::endl;
+		return;
+	}
+	int min_ind = 0;
+	if (!carvingtype)//remove vertically
+	{
+		int map_size = image_w*image_h;
+		int line_size = image_w;
+		for (int j = 0; j < aw; j++) {
+
+			mapindex[0][j][0] = smoothmap[j];
+		}
+		int* min_path = new int[ah];//record the minimum path
+		for (int i = 1; i < ah; i++)
+			for (int j = 0; j < aw; j++) {
+			    int val = smoothmap[i*image_w + j];
+				mapindex[i][j][0] = mapindex[i - 1][j][0]+ val;
+				mapindex[i][j][1] = 0;
+					for (int k = -1; k < 2; )//check 3 in the previous row
+					{
+						if ((j + k) >= 0 && (j + k) < aw)
+						{
+							if (mapindex[i - 1][j + k][0] + val < mapindex[i][j][0])
+							{
+								mapindex[i][j][0] = mapindex[i - 1][j + k][0] + val;
+								mapindex[i][j][1] = k;
+							}
+						}
+						k += 2;
+					}
+			}
+		float min = INF;
+		
+		for (int j = 0; j < aw; j++) {
+			cout << j << " " << mapindex[ah - 1][j][0] << endl;
+			if (mapindex[ah - 1][j][0] < min)
+			{
+				min = mapindex[ah - 1][j][0];
+				min_ind = j;
+			}
+		}
+		for (int i = (ah - 1); i >= 0; i--)
+		{
+			min_path[i]= min_ind;
+			cout << min_ind<<" ";
+			min_ind = min_ind+mapindex[i][min_ind][1];
+		}
+		cout << endl;
+
+		//for open_cv mat and image in retargeting, this is different
+		
+		
+		for (int i = (ah - 1); i >= 0; i--)//remove verticle line
+		{
+			int j = min_path[i];
+			while (j < aw-1) {
+				for (int d = 0; d < ch; d++)
+				dup_a[(i*line_size + j)*ch+d] = dup_a[( i*line_size + j + 1)*ch+d];
+				j++;
+			}
+			for (int d = 0; d < ch; d++)
+			dup_a[(i*line_size + aw - 1)*ch+d] = 0;
+		}
+		
+		for (int i = (ah - 1); i >= 0; i--)//remove verticle line
+		{
+			int j = min_path[i];
+			while (j < aw-1) {
+				smoothmap[i*line_size + j] = smoothmap[ i*line_size + j + 1];
+				j++;
+			}
+			smoothmap[i*line_size + aw - 1] = 0;
+		}
+		
+		delete min_path;
+	}
+	else {//remove horizontally
+		int map_size = image_w*image_h;
+		int line_size = image_w;
+		for (int i = 0; i < ah; i++) {
+
+			mapindex[i][0][0] = smoothmap[i*line_size];
+		}
+		int* min_path = new int[aw];//record the minimum path
+		for (int j = 1; j < aw; j++)
+			for (int i = 0; i < ah; i++) {
+				int val = smoothmap[i*image_w + j];
+				mapindex[i][j][0] = mapindex[i][j-1][0] + val;
+				mapindex[i][j][1] = 0;
+				for (int k = -1; k < 2; )//check 3 in the previous row
+				{
+					if ((i + k) >= 0 && (i + k) < ah)
+					{
+						if (mapindex[i+k][j-1][0] + val < mapindex[i][j][0])
+						{
+							mapindex[i][j][0] = mapindex[i+k][j-1][0] + val;
+							mapindex[i][j][1] = k;
+						}
+					}
+					k += 2;
+				}
+			}
+		float min = INF;
+
+		for (int i = 0; i < ah; i++) {
+			cout << i << " " << mapindex[i][aw-1][0] << endl;
+			if (mapindex[i][aw-1][0] < min)
+			{
+				min = mapindex[i][aw-1][0];
+				min_ind = i;
+			}
+		}
+		for (int j = (aw - 1); j >= 0; j--)
+		{
+			min_path[j] = min_ind;
+			cout << min_ind << " ";
+			min_ind = min_ind + mapindex[min_ind][j][1];
+		}
+		cout << endl;
+
+		//for open_cv mat and image in retargeting, this is different
+
+
+		for (int j = (aw - 1); j >= 0; j--)//remove verticle line
+		{
+			int i = min_path[j];
+			while (i < ah - 1) {
+				for (int d = 0; d < ch; d++)
+					dup_a[(i*line_size + j)*ch + d] = dup_a[((i+1)*line_size + j )*ch + d];
+				i++;
+			}
+			for (int d = 0; d < ch; d++)
+				dup_a[((ah-1)*line_size + j)*ch + d] = 0;
+		}
+		for (int j = (aw - 1); j >= 0; j--)//remove verticle line
+		{
+			int i = min_path[j];
+			while (i < ah - 1) {
+					smoothmap[(i*line_size + j)] = dup_a[((i + 1)*line_size + j)];
+				i++;
+			}
+				smoothmap[((ah - 1)*line_size + j)] = 0;
+		}
+
+		delete min_path;
+	}
+	//remove line
+	delete mapindex;
+
+}
+int main()
+{
+
+	Mat image1 = imread("E:\\cv\\retargeting\\image_transfer\\original0.png");
+	//vector<Mat> spt;
+	//spt.resize(3);
+	//split(image1, spt);
+	Mat temp,smoothmap;
+	image1.copyTo(smoothmap);
+	smoothmap = smoothmap.reshape(1, image1.cols*image1.rows);
+	reduce(smoothmap, smoothmap, 1, REDUCE_AVG);
+	smoothmap = smoothmap.reshape(1, image1.rows);
+	namedWindow("energymap", 0);
+	imshow("energymap",smoothmap );
+	//cv::add(spt[0], spt[1], temp);
+	//cv::add(spt[2], temp, smoothmap);
+	//namedWindow("connection_map", 0);
+	//imshow(spt[0])
+	namedWindow("original", 0);
+	imshow("original", image1);
+	namedWindow("smoothmap", 0);
+	imshow("smoothmap", smoothmap);
+	cv::Mat origin, smooth;
+	/*
+	image1.convertTo(origin, CV_32FC3);
+	smoothmap.convertTo(smooth, CV_32FC1);
+	std::vector<float> myorigin, mysmooth;
+	if (origin.isContinuous()) {
+		myorigin.assign((float*)origin.datastart, (float*)origin.dataend);
+	}
+	else {
+		for (int i = 0; i < origin.rows; i++) {
+			myorigin.insert(myorigin.end(), origin.ptr<float>(i), origin.ptr<float>(i) + origin.cols);
+		}
+	}
+	if (smooth.isContinuous()) {
+		mysmooth.assign((float*)smooth.datastart, (float*)smooth.dataend);
+	}
+	else {
+		for (int i = 0; i < smooth.rows; i++) {
+			mysmooth.insert(mysmooth.end(), smooth.ptr<float>(i), smooth.ptr<float>(i) + smooth.cols);
+		}
+	}
+	*/
+
+	int params[5] = { 3, smoothmap.rows-3, smoothmap.cols-3, smoothmap.rows, smoothmap.cols };
+	SeamcarvingAnn(image1.data, smoothmap.data,params);
+	namedWindow("retarget", 0);
+	imshow("retarget", image1);
+	waitKey();
+	return 0;
+}
+
