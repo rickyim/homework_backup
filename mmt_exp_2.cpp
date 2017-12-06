@@ -1,6 +1,7 @@
 //https://gist.github.com/kbjorklu/6317308 of great help
 //there are also other samples you can find on google of baidu
 //but the key is that you should not reset the device and you should wait at the end 
+
 #include "stdafx.h"
 #include <Windows.h>
 #include <string>
@@ -139,3 +140,28 @@ int main() {
 	Sleep(60*1000);//have to wait, otherwise no voice!
 	return 0;
 }
+//below is his file
+/*
+#include <windows.h>
+#include <mmsystem.h>
+#pragma comment(lib, "winmm.lib")
+
+int main()
+{
+	HWAVEOUT hWaveOut = 0;
+	WAVEFORMATEX wfx = { WAVE_FORMAT_PCM, 1, 8000, 8000, 1, 8, 0 };
+	waveOutOpen(&hWaveOut, WAVE_MAPPER, &wfx, 0, 0, CALLBACK_NULL);
+	char buffer[8000 * 60] = {};
+	
+	// See http://goo.gl/hQdTi
+	for (DWORD t = 0; t < sizeof(buffer); ++t)
+		buffer[t] = static_cast<char>((((t * (t >> 8 | t >> 9) & 46 & t >> 8)) ^ (t & t >> 13 | t >> 6)) & 0xFF);
+	
+	WAVEHDR header = { buffer, sizeof(buffer), 0, 0, 0, 0, 0, 0 };
+	waveOutPrepareHeader(hWaveOut, &header, sizeof(WAVEHDR));
+	waveOutWrite(hWaveOut, &header, sizeof(WAVEHDR));
+	waveOutUnprepareHeader(hWaveOut, &header, sizeof(WAVEHDR));
+	waveOutClose(hWaveOut);
+	Sleep(60 * 1000);
+}
+*/
