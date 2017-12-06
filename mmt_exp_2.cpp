@@ -1,7 +1,6 @@
-//https://gist.github.com/kbjorklu/6317308 of great help
-//there are also other samples you can find on google of baidu
-//but the key is that you should not reset the device and you should wait at the end 
-
+/*reference 
+//https://gist.github.com/kbjorklu/6317308 
+//course material of mmt@ bb.ustc.edu.cn*/
 #include "stdafx.h"
 #include <Windows.h>
 #include <string>
@@ -9,49 +8,53 @@
 #pragma comment(lib, "Winmm.lib")
 using namespace std;
 int main() {
-	LPWSTR lp = _T("E:\\courses\\vocal\\exp_2\\test_16k.wav");
+	LPWSTR lp = _T("E:\\courses\\vocal\\exp_2\\test_16.wav");
 	MMCKINFO MMCKInfoParent;
 	MMCKINFO MMCKInfoChild;
-	HMMIO hmmio = mmioOpen(lp, NULL, MMIO_READ|MMIO_ALLOCBUF);
+	HMMIO hmmio = mmioOpen(lp, NULL, MMIO_READ | MMIO_ALLOCBUF);
 	if (!hmmio) {
 		cout << "cannot open" << endl;
 		return 0;
 	}
 	MMCKInfoParent.fccType = mmioFOURCC('W', 'A', 'V', 'E');
 	mmioDescend(hmmio, &MMCKInfoParent, NULL, MMIO_FINDRIFF);
-	cout << "format chunck" << endl;
-	cout << MMCKInfoParent.ckid << endl;
-	cout << MMCKInfoParent.fccType << endl;
-	cout << MMCKInfoParent.dwDataOffset << endl;
-	cout << "parent_cksize" << MMCKInfoParent.cksize << endl;
-	MMCKInfoChild.ckid = mmioFOURCC('f', 'm', 't',' ');
+	cout << "RIFF chunck " << endl;
+	cout << "RIFF ckid " << MMCKInfoParent.ckid << endl;
+	cout << "RIFF fcctype " << MMCKInfoParent.fccType << endl;
+	cout << "RIFF offset " << MMCKInfoParent.dwDataOffset << endl;
+	cout << "RIFF_cksize " << MMCKInfoParent.cksize << endl;
+	MMCKInfoChild.ckid = mmioFOURCC('f', 'm', 't', ' ');
 	if ((mmioDescend(hmmio, &MMCKInfoChild, &MMCKInfoParent, MMIO_FINDCHUNK)))
 	{
 		cout << "cannot find fmk chunk" << endl;
 		return 0;
 	}
 	//READ Format Chunk
-	HGLOBAL m_hFormat= GlobalAlloc(GMEM_MOVEABLE, MMCKInfoChild.cksize);
+	/*
+	HGLOBAL m_hFormat = GlobalAlloc(GMEM_MOVEABLE, MMCKInfoChild.cksize);
 	if (!m_hFormat)
 	{
-		cout<<"failed alloc memory"<<endl;
+		cout << "failed alloc memory" << endl;
 		return 0;
 	}
+
 	
 	WAVEFORMATEX* PCMWaveFmtRecord;
 	if (!(PCMWaveFmtRecord = (WAVEFORMATEX*)GlobalLock(m_hFormat))) {
 		cout << "cannot allocate memory for format" << endl;
 		return 0;
 	}
-	if ((unsigned long)mmioRead(hmmio, (HPSTR)PCMWaveFmtRecord, MMCKInfoChild.cksize) != MMCKInfoChild.cksize) {
+	*/
+	PCMWAVEFORMAT PCMWaveFmtRecord;
+	if ((unsigned long)mmioRead(hmmio, (HPSTR)&PCMWaveFmtRecord, MMCKInfoChild.cksize) != MMCKInfoChild.cksize) {
 		cout << "cannot reak format chunk" << endl;
 		return 0;
 	}
-	cout << "format chunck" << endl;
-	cout << MMCKInfoChild.ckid<<endl;
-	cout << MMCKInfoChild.fccType<<endl;
-	cout << MMCKInfoChild.dwDataOffset << endl;
-	cout << "format_cksize" << MMCKInfoChild.cksize << endl;
+	cout << "format chunck " << endl;
+	cout << "format ckid " << MMCKInfoChild.ckid << endl;
+	cout << "format fcctype " << MMCKInfoChild.fccType << endl;
+	cout << "format offset " << MMCKInfoChild.dwDataOffset << endl;
+	cout << "format_cksize " << MMCKInfoChild.cksize << endl;
 	mmioAscend(hmmio, &MMCKInfoChild, 0);
 	//find data
 	MMCKInfoChild.ckid = mmioFOURCC('d', 'a', 't', 'a');
@@ -63,7 +66,7 @@ int main() {
 	//size of data
 	DWORD DataSize = MMCKInfoChild.cksize;
 	DWORD DataOffset = MMCKInfoChild.dwDataOffset;
-	cout << "datasize" << DataSize << "Offset"<<DataOffset<<endl;
+	cout << "datasize" << DataSize << "Offset" << DataOffset << endl;
 	if (DataSize == 0L) {
 		cout << "no data" << endl;
 		return 0;
@@ -87,24 +90,17 @@ int main() {
 	if (mmioSeek(hmmio, DataOffset, SEEK_SET) < 0) {
 		cout << "cannot read the data in 1" << endl;
 	}
-	
+
 	DWORD m_WaveLong;
 	m_WaveLong = mmioRead(hmmio, (LPSTR)lpData, DataSize);
-	cout << "m_WaveLong" <<m_WaveLong<< endl;
+	cout << "m_WaveLong" << m_WaveLong << endl;
 	if (m_WaveLong < 0) {
 		cout << "cannot read the data in 2" << endl;
 		return 0;
 	}
 	//open the device
-	/*
-	WAVEOUTCAPS pwoc;
-	if(waveOutGetDevCaps(WAVE_MAPPER, &pwoc, sizeof(WAVEOUTCAPS)) != 0) {
-		cout << "unable to get devices" << endl;
-		return 0;
-	}
-	*/
 	HWAVEOUT hWaveOut;
-	if (waveOutOpen(&hWaveOut, WAVE_MAPPER, PCMWaveFmtRecord, NULL,NULL, CALLBACK_NULL) != 0) {
+	if (waveOutOpen(&hWaveOut, WAVE_MAPPER, (LPCWAVEFORMATEX)&PCMWaveFmtRecord, NULL, NULL, CALLBACK_NULL) != 0) {
 		cout << "unable to Open the file format" << endl;
 		return 0;
 	}
@@ -118,7 +114,7 @@ int main() {
 	lpWaveHdr->lpData = (LPSTR)lpData;
 	lpWaveHdr->dwBufferLength = m_WaveLong;
 	lpWaveHdr->dwFlags = 0L;
-	lpWaveHdr->dwLoops = 1L;
+	lpWaveHdr->dwLoops = 0L;
 	if (waveOutPrepareHeader(hWaveOut, lpWaveHdr, sizeof(WAVEHDR)) != 0) {
 		cout << "fail to prepare the wave data buffer" << endl;
 		return 0;
@@ -131,13 +127,11 @@ int main() {
 		cout << "fail to write the data buffer" << endl;
 		return 0;
 	}
-	//do {
-//
-	//} while (!pWaveOutHdr.dwFlags & WHDR_DONE);
 	cout << "press any key" << endl;
-	//waveOutReset(hWaveOut);//have to comment this
+	do {} while (!(lpWaveHdr->dwFlags & WHDR_DONE));
+	waveOutUnprepareHeader(hWaveOut, lpWaveHdr, sizeof(WAVEHDR));
 	waveOutClose(hWaveOut);
-	Sleep(60*1000);//have to wait, otherwise no voice!
+	//Sleep(60 * 1000);
 	return 0;
 }
 //below is his file
