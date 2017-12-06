@@ -1,4 +1,6 @@
-
+//https://gist.github.com/kbjorklu/6317308 of great help
+//there are also other samples you can find on google of baidu
+//but the key is that you should not reset the device and you should wait at the end 
 #include "stdafx.h"
 #include <Windows.h>
 #include <string>
