@@ -132,7 +132,8 @@ int main() {
 //
 	//} while (!pWaveOutHdr.dwFlags & WHDR_DONE);
 	cout << "press any key" << endl;
-	waveOutReset(hWaveOut);
+	//waveOutReset(hWaveOut);//have to comment this
 	waveOutClose(hWaveOut);
+	Sleep(60*1000);//have to wait, otherwise no voice!
 	return 0;
 }
